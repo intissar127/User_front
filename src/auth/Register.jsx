@@ -8,8 +8,9 @@ const Register = () => {
     email: '',
     passwd: '',
     role: 'STUDENT',
-    filiere: '',
-    specialite: ''
+ 
+    specialite: '',
+    encadreur: ''
   });
 
   const [loading, setLoading] = useState(false);
@@ -21,7 +22,7 @@ const Register = () => {
       const response = await registerUser(formData);
       alert("Bienvenue sur Soutenancia ! Compte créé avec succès.");
       console.log(response.data);
-    } catch (error) {
+    } catch {
       alert("Erreur lors de l'inscription. Vérifiez votre backend.");
     } finally {
       setLoading(false);
@@ -125,16 +126,23 @@ const Register = () => {
               </div>
 
               {formData.role === "STUDENT" && (
-                <div className="relative">
-                  <GraduationCap className="absolute left-4 top-3.5 text-slate-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Filière (ex: 2ème année Cycle Ingénieur)"
-                    className="w-full pl-12 pr-4 py-3 bg-blue-50/50 border border-blue-100 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
-                    onChange={(e) => setFormData({ ...formData, filiere: e.target.value })}
-                    required
-                  />
-                </div>
+                <>
+                  <div className="relative">
+                    <GraduationCap className="absolute left-4 top-3.5 text-slate-400 w-5 h-5" />
+                    
+                  </div>
+
+                  <div className="relative">
+                    <User className="absolute left-4 top-3.5 text-slate-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      placeholder="Encadreur (ex: Dr. Ahmed Ben Ali)"
+                      className="w-full pl-12 pr-4 py-3 bg-blue-50/50 border border-blue-100 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
+                      onChange={(e) => setFormData({ ...formData, encadreur: e.target.value })}
+                      required
+                    />
+                  </div>
+                </>
               )}
             </div>
           )}

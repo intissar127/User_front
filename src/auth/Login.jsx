@@ -1,64 +1,71 @@
 import { useState } from 'react';
 import { GraduationCap, Mail, Lock, ArrowRight, UserCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import keycloak from '../keycloak';
+
 const Login = () => {
   const navigate = useNavigate();
   const [credentials, setCredentials] = useState({
     email: '',
     password: '',
-    role: 'STUDENT' // Rôle par défaut
+    role: 'STUDENT'
   });
-
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     try {
-        // 1. Envoyer email/password à Keycloak
-        const response = await fetch(
-            'http://localhost:8180/realms/soutenancia/protocol/openid-connect/token',
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({
-                    grant_type: 'password',
-                    client_id: 'soutenancia-frontend',
-                    username: credentials.email,
-                    password: credentials.password,
-                })
-            }
-        );
-        const data = await response.json();
-        console.log('Keycloak response:', data); 
+      const params = new URLSearchParams();
+      params.append('grant_type', 'password');
+      params.append('client_id', 'soutenancia-frontend');
+      params.append('username', credentials.email);
+      params.append('password', credentials.password);
 
-        if (!response.ok) {
-            alert("Email ou mot de passe incorrect.");
-            return;
+      const response = await fetch(
+        'http://localhost:8180/realms/soutenancia/protocol/openid-connect/token',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params,
         }
+      );
 
-        // 2. Récupérer le token
-        // const data = await response.json();
-        localStorage.setItem('token', data.access_token);
-        localStorage.setItem('refresh_token', data.refresh_token);
-localStorage.setItem('token_expiry', Date.now() + (data.expires_in * 1000));
+      const data = await response.json();
 
-        // 3. Lire le rôle depuis le token
-        const payload = JSON.parse(atob(data.access_token.split('.')[1]));
-        const roles = payload.realm_access?.roles || [];
+      if (!response.ok) {
+        alert(data.error_description || "Identifiants invalides.");
+        return;
+      }
 
-        // 4. Rediriger selon le rôle
-        if (roles.includes('ADMIN')) navigate('/admin-dashboard');
-        else if (roles.includes('TEACHER')) navigate('/teacher-dashboard');
-        else navigate('/student-dashboard');
+      // ✅ CORRECTION 2 : Utiliser sessionStorage au lieu de localStorage
+      // Moins vulnérable car les données ne survivent pas à la fermeture du navigateur
+      sessionStorage.setItem('token', data.access_token);
+      sessionStorage.setItem('refresh_token', data.refresh_token);
+      
+      // ✅ CORRECTION 4 : Préparer le refresh automatique
+      // On stocke le moment exact de l'expiration
+      const expiresAt = Date.now() + (data.expires_in * 1000);
+      sessionStorage.setItem('expires_at', expiresAt);
+
+      // ✅ CORRECTION 3 : Décodage (on garde le décodage client UNIQUEMENT pour l'UI)
+      // Note : La vraie vérification se fera côté Spring Boot via la signature
+      const payload = JSON.parse(atob(data.access_token.split('.')[1]));
+      const roles = payload.realm_access?.roles || [];
+
+      // Redirection
+      if (roles.includes('ADMIN')) navigate('/admin-dashboard');
+      else if (roles.includes('TEACHER')) navigate('/teacher-dashboard');
+      else if (roles.includes('STUDENT')) navigate('/student-dashboard');
+      else alert("Rôle non reconnu.");
 
     } catch (error) {
-        alert("Erreur de connexion.");
+      console.error("Erreur login:", error);
+      alert("Erreur de connexion au serveur.");
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
@@ -73,22 +80,21 @@ localStorage.setItem('token_expiry', Date.now() + (data.expires_in * 1000));
             <div className="absolute inset-0 bg-blue-400/20 rounded-full blur-xl group-hover:blur-2xl transition-all"></div>
             <GraduationCap className="w-10 h-10 text-blue-600 relative z-10" />
           </div>
-          <h1 className="text-5xl font-extrabold tracking-tighter animate-in fade-in slide-in-from-bottom-3 duration-1000">
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600 bg-300% animate-gradient-text">
+          <h1 className="text-5xl font-extrabold tracking-tighter">
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600">
               Soutenancia
             </span>
           </h1>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          
-          {/* Sélecteur de Rôle (Placé en haut pour définir le contexte) */}
+          {/* Sélection du rôle (Visuel uniquement ici, le vrai rôle vient du token) */}
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 ml-1">Se connecter en tant que :</label>
+            <label className="text-sm font-bold text-slate-700 ml-1">Type de compte :</label>
             <div className="relative">
               <UserCircle className="absolute left-4 top-3.5 text-slate-400 w-5 h-5" />
               <select
-                className="w-full pl-12 pr-4 py-3 bg-blue-50/50 border border-blue-100 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer shadow-sm appearance-none font-medium text-slate-700"
+                className="w-full pl-12 pr-4 py-3 bg-blue-50/50 border border-blue-100 rounded-xl outline-none cursor-pointer font-medium text-slate-700 appearance-none"
                 value={credentials.role}
                 onChange={(e) => setCredentials({ ...credentials, role: e.target.value })}
               >
@@ -99,25 +105,27 @@ localStorage.setItem('token_expiry', Date.now() + (data.expires_in * 1000));
             </div>
           </div>
 
-          {/* Champ Email */}
+          {/* Email */}
           <div className="relative">
             <Mail className="absolute left-4 top-3.5 text-slate-400 w-5 h-5" />
             <input
               type="email"
               placeholder="Adresse email"
               className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
+              value={credentials.email}
               onChange={(e) => setCredentials({ ...credentials, email: e.target.value })}
               required
             />
           </div>
 
-          {/* Champ Password */}
+          {/* Password */}
           <div className="relative">
             <Lock className="absolute left-4 top-3.5 text-slate-400 w-5 h-5" />
             <input
               type="password"
               placeholder="Mot de passe"
               className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
+              value={credentials.password}
               onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
               required
             />
@@ -126,7 +134,7 @@ localStorage.setItem('token_expiry', Date.now() + (data.expires_in * 1000));
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 group mt-4"
+            className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-blue-500/50 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 group mt-4 disabled:opacity-70"
           >
             {loading ? "Vérification..." : "Accéder à mon espace"}
             {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
